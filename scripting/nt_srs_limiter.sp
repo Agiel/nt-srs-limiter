@@ -4,7 +4,7 @@
 #include <sdkhooks>
 #include <sdktools>
 
-#define PLUGIN_VERSION "1.0"
+#define PLUGIN_VERSION "1.1"
 
 public Plugin myinfo = {
 	name = "Neotokyo SRS Quickswitch Limiter",
@@ -22,17 +22,18 @@ ConVar g_cvarSRSRof = null;
 public void OnPluginStart()
 {
 	CreateConVar("sm_srs_limiter_version", PLUGIN_VERSION,
-		"NT autoswitch limiter version.", FCVAR_DONTRECORD);
+		"NT SRS quickswitch limiter version.", FCVAR_DONTRECORD);
 
 	// The time between shots without quickswapping is just under 1.4 seconds. I put the default at 1.38 because
 	// I'd rather be on the conservative side. Subject to future tweaking.
 	g_cvarSRSRof = CreateConVar("sm_srs_rof", "1.38",
-		"Minimum delay between shots when quickswapping, in seconds.", _, true, 0.0, true, 10.0);
+		"Minimum delay between shots when quickswapping, in seconds.", _, true, 1.0, true, 2.0);
 
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (IsValidClient(client))
 		{
+			SDKHook(client, SDKHook_SpawnPost, OnClientSpawned_Post);
 			SDKHook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch_Post);
 		}
 	}
@@ -54,6 +55,7 @@ public void OnClientPutInServer(int client)
 {
 	if (IsValidClient(client))
 	{
+		SDKHook(client, SDKHook_SpawnPost, OnClientSpawned_Post);
 		SDKHook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch_Post);
 	}
 }
@@ -62,8 +64,14 @@ public void OnClientDisconnect(int client)
 {
 	if (IsValidClient(client))
 	{
+		SDKUnhook(client, SDKHook_SpawnPost, OnClientSpawned_Post);
 		SDKUnhook(client, SDKHook_WeaponSwitchPost, OnWeaponSwitch_Post);
 	}
+}
+
+public void OnClientSpawned_Post(int client)
+{
+	_flNextAttack[client] = 0.0;
 }
 
 bool IsSRS(int weapon)
@@ -85,7 +93,17 @@ public void OnWeaponSwitch_Post(int client, int weapon)
 		return;
 	}
 
-	if (IsSRS(weapon) && (_flNextAttack[client] > GetNextAttack(client)))
+	if (!IsSRS(weapon)) {
+		return;
+	}
+
+	if (_flNextAttack[client] - GetGameTime() > 2.0) {
+		// If the diff is this big something weird is going on, better reset and return.
+		_flNextAttack[client] = 0.0;
+		return;
+	}
+
+	if (_flNextAttack[client] > GetNextAttack(client))
 	{
 		SetNextAttack(client, _flNextAttack[client]);
 	}
