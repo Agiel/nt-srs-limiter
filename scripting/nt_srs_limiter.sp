@@ -4,7 +4,7 @@
 #include <sdkhooks>
 #include <sdktools>
 
-#define PLUGIN_VERSION "1.1"
+#define PLUGIN_VERSION "1.2"
 
 public Plugin myinfo = {
 	name = "Neotokyo SRS Quickswitch Limiter",
@@ -120,7 +120,7 @@ void SetNextAttack(int client, float nextTime)
 		SetFailState("Failed to obtain offset: \"%s\"!", sOffsetName);
 	}
 
-	SetEntDataFloat(client, ptrHandle, nextTime);
+	SetEntDataFloat(client, ptrHandle, nextTime, true);
 }
 
 float GetNextAttack(int client)
