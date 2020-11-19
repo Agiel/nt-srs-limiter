@@ -122,7 +122,7 @@ void SetNextAttack(int client, float nextTime)
 		SetFailState("Failed to obtain offset: \"%s\"!", sOffsetName);
 	}
 
-	SetEntDataFloat(client, ptrHandle, nextTime);
+	SetEntDataFloat(client, ptrHandle, nextTime, true);
 }
 
 float GetNextAttack(int client)
