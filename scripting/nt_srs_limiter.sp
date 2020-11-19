@@ -17,6 +17,9 @@ public Plugin myinfo = {
 #define NEO_MAX_CLIENTS 32
 static float _flNextAttack[NEO_MAX_CLIENTS + 1];
 
+static int _srs_edicts[NEO_MAX_CLIENTS];
+static int _srs_edicts_head = 0;
+
 #define SRS_ROF_MAX 2.0
 ConVar g_cvarSRSRof = null;
 
@@ -40,6 +43,33 @@ public void OnPluginStart()
 	}
 
 	AddTempEntHook("Shotgun Shot", OnFireBullets);
+
+	// Find all of the pre-existing SRS.
+	char classname[11]; // weapon_srs\0
+	for (int edict = NEO_MAX_CLIENTS + 1; edict <= GetMaxEntities(); edict++)
+	{
+		if (!IsValidEdict(edict) || !GetEdictClassname(edict, classname, sizeof(classname)))
+		{
+			continue;
+		}
+		if (StrEqual(classname, "weapon_srs"))
+		{
+			AddTrackedSRS(edict);
+		}
+	}
+}
+
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if (StrEqual(classname, "weapon_srs"))
+	{
+		AddTrackedSRS(entity);
+	}
+}
+
+public void OnEntityDestroyed(int entity)
+{
+	RemoveTrackedSRS(entity);
 }
 
 public Action OnFireBullets(const char[] te_name, const int[] Players, int numClients, float delay)
@@ -77,11 +107,12 @@ public void OnClientSpawned_Post(int client)
 
 bool IsSRS(int weapon)
 {
-	char name[11]; // weapon_srs\0
-	GetEdictClassname(weapon, name, sizeof(name));
-	if (StrEqual(name, "weapon_srs"))
+	for (int i = 0; i < sizeof(_srs_edicts); ++i)
 	{
-		return true;
+		if (_srs_edicts[i] == weapon)
+		{
+			return true;
+		}
 	}
 
 	return false;
@@ -154,4 +185,22 @@ bool IsValidClient(client) {
 		return false;
 
 	return true;
+}
+
+void AddTrackedSRS(int srs_edict)
+{
+	_srs_edicts[_srs_edicts_head] = srs_edict;
+	_srs_edicts_head = (_srs_edicts_head + 1) % sizeof(_srs_edicts);
+}
+
+void RemoveTrackedSRS(int srs_edict)
+{
+	for (int i = 0; i < sizeof(_srs_edicts); ++i)
+	{
+		if (_srs_edicts[i] == srs_edict)
+		{
+			_srs_edicts[i] = 0;
+			return;
+		}
+	}
 }
