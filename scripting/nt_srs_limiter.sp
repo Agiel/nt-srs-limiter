@@ -17,6 +17,7 @@ public Plugin myinfo = {
 #define NEO_MAX_CLIENTS 32
 static float _flNextAttack[NEO_MAX_CLIENTS + 1];
 
+#define SRS_ROF_MAX 2.0
 ConVar g_cvarSRSRof = null;
 
 public void OnPluginStart()
@@ -27,7 +28,7 @@ public void OnPluginStart()
 	// The time between shots without quickswapping is just under 1.4 seconds. I put the default at 1.38 because
 	// I'd rather be on the conservative side. Subject to future tweaking.
 	g_cvarSRSRof = CreateConVar("sm_srs_rof", "1.38",
-		"Minimum delay between shots when quickswapping, in seconds.", _, true, 1.0, true, 2.0);
+		"Minimum delay between shots when quickswapping, in seconds.", _, true, 1.0, true, SRS_ROF_MAX);
 
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -97,7 +98,8 @@ public void OnWeaponSwitch_Post(int client, int weapon)
 		return;
 	}
 
-	if (_flNextAttack[client] - GetGameTime() > 2.0) {
+	// GetGameTime is accurate up to 0.1 seconds, so offsetting this check by that amount.
+	if (_flNextAttack[client] - GetGameTime() > SRS_ROF_MAX + 0.1) {
 		// If the diff is this big something weird is going on, better reset and return.
 		_flNextAttack[client] = 0.0;
 		return;
