@@ -4,7 +4,7 @@
 #include <sdkhooks>
 #include <sdktools>
 
-#define PLUGIN_VERSION "1.1"
+#define PLUGIN_VERSION "1.2"
 
 public Plugin myinfo = {
 	name = "Neotokyo SRS Quickswitch Limiter",
@@ -17,6 +17,10 @@ public Plugin myinfo = {
 #define NEO_MAX_CLIENTS 32
 static float _flNextAttack[NEO_MAX_CLIENTS + 1];
 
+static int _srs_edicts[NEO_MAX_CLIENTS];
+static int _srs_edicts_head = 0;
+
+#define SRS_ROF_MAX 2.0
 ConVar g_cvarSRSRof = null;
 
 public void OnPluginStart()
@@ -27,7 +31,7 @@ public void OnPluginStart()
 	// The time between shots without quickswapping is just under 1.4 seconds. I put the default at 1.38 because
 	// I'd rather be on the conservative side. Subject to future tweaking.
 	g_cvarSRSRof = CreateConVar("sm_srs_rof", "1.38",
-		"Minimum delay between shots when quickswapping, in seconds.", _, true, 1.0, true, 2.0);
+		"Minimum delay between shots when quickswapping, in seconds.", _, true, 1.0, true, SRS_ROF_MAX);
 
 	for (int client = 1; client <= MaxClients; client++)
 	{
@@ -39,6 +43,33 @@ public void OnPluginStart()
 	}
 
 	AddTempEntHook("Shotgun Shot", OnFireBullets);
+
+	// Find all of the pre-existing SRS.
+	char classname[11]; // weapon_srs\0
+	for (int edict = NEO_MAX_CLIENTS + 1; edict <= GetMaxEntities(); edict++)
+	{
+		if (!IsValidEdict(edict) || !GetEdictClassname(edict, classname, sizeof(classname)))
+		{
+			continue;
+		}
+		if (StrEqual(classname, "weapon_srs"))
+		{
+			AddTrackedSRS(edict);
+		}
+	}
+}
+
+public void OnEntityCreated(int entity, const char[] classname)
+{
+	if (StrEqual(classname, "weapon_srs"))
+	{
+		AddTrackedSRS(entity);
+	}
+}
+
+public void OnEntityDestroyed(int entity)
+{
+	RemoveTrackedSRS(entity);
 }
 
 public Action OnFireBullets(const char[] te_name, const int[] Players, int numClients, float delay)
@@ -76,11 +107,12 @@ public void OnClientSpawned_Post(int client)
 
 bool IsSRS(int weapon)
 {
-	char name[11]; // weapon_srs\0
-	GetEdictClassname(weapon, name, sizeof(name));
-	if (StrEqual(name, "weapon_srs"))
+	for (int i = 0; i < sizeof(_srs_edicts); ++i)
 	{
-		return true;
+		if (_srs_edicts[i] == weapon)
+		{
+			return true;
+		}
 	}
 
 	return false;
@@ -97,7 +129,8 @@ public void OnWeaponSwitch_Post(int client, int weapon)
 		return;
 	}
 
-	if (_flNextAttack[client] - GetGameTime() > 2.0) {
+	// GetGameTime is accurate up to 0.1 seconds, so offsetting this check by that amount.
+	if (_flNextAttack[client] - GetGameTime() > SRS_ROF_MAX + 0.1) {
 		// If the diff is this big something weird is going on, better reset and return.
 		_flNextAttack[client] = 0.0;
 		return;
@@ -120,7 +153,7 @@ void SetNextAttack(int client, float nextTime)
 		SetFailState("Failed to obtain offset: \"%s\"!", sOffsetName);
 	}
 
-	SetEntDataFloat(client, ptrHandle, nextTime);
+	SetEntDataFloat(client, ptrHandle, nextTime, true);
 }
 
 float GetNextAttack(int client)
@@ -142,14 +175,29 @@ bool IsValidClient(client) {
 	if (client == 0)
 		return false;
 
-	if (!IsClientConnected(client))
+	if (!IsClientInGame(client))
 		return false;
 
 	if (IsFakeClient(client))
 		return false;
 
-	if (!IsClientInGame(client))
-		return false;
-
 	return true;
+}
+
+void AddTrackedSRS(int srs_edict)
+{
+	_srs_edicts[_srs_edicts_head] = srs_edict;
+	_srs_edicts_head = (_srs_edicts_head + 1) % sizeof(_srs_edicts);
+}
+
+void RemoveTrackedSRS(int srs_edict)
+{
+	for (int i = 0; i < sizeof(_srs_edicts); ++i)
+	{
+		if (_srs_edicts[i] == srs_edict)
+		{
+			_srs_edicts[i] = 0;
+			return;
+		}
+	}
 }
